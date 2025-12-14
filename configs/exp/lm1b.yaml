@@ -26,7 +26,14 @@ data:
 
 sampling:
   steps       : 1000
-  predictor   : grw
+  predictor   : pfm_ode
+  pfm:
+    topk               : 0
+    topp               : 1.0
+    mc_samples         : 1
+    stochastic         : false
+    use_inv_time       : true
+    use_scheduler_coeff: false
 
 eval:
   batch_size    : ${training.batch_size}

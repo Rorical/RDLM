@@ -169,8 +169,12 @@ def _run(rank, world_size, cfg):
     # define sampling function
     sampling_eps = 1e-5
     sampling_shape = (cfg.sampling.batch_per_gpu, seq_length, vocab_size)
+    pfm_cfg = None
+    if "pfm" in cfg.sampling:
+        pfm_cfg = OmegaConf.to_container(cfg.sampling.pfm, resolve=True)
+    drift_kwargs = {"pfm": pfm_cfg} if pfm_cfg else None
     sampling_fn = sampling.get_sampling_fn(
-        cfg, sde, sampling_shape, sampling_eps, device, proj_fn=(lambda x: x)
+        cfg, sde, sampling_shape, sampling_eps, device, proj_fn=(lambda x: x), drift_kwargs=drift_kwargs
     )
 
     mprint(f"Generating text at step: {step}")

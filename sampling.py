@@ -78,6 +78,17 @@ class EulerMaruyamaPredictor(Predictor):
         return x
     
 
+@register_predictor(name="pfm_ode")
+class ProbabilityFlowPredictor(Predictor):
+    def __init__(self, sde):
+        super().__init__(sde)
+
+    def update_fn(self, drift_model, x, t, dt):
+        drift = drift_model(x, t)
+        x = self.sde.manifold.exp(tangent_vec=drift * dt, base_point=x)
+        return x
+
+
 def get_sde_sampler(
     sde, 
     batch_dims, 
@@ -85,13 +96,14 @@ def get_sde_sampler(
     steps=1000, 
     eps=1e-5, 
     device='cpu', 
-    proj_fn=lambda x: x # used for conditional sampling
+    proj_fn=lambda x: x, # used for conditional sampling
+    drift_kwargs=None,
 ):
     predictor = get_predictor(predictor)(sde)
 
     @torch.no_grad()
     def pc_sampler(model):
-        drift_fn = mutils.get_drift_fn(model, sde, train=False, sampling=True)
+        drift_fn = mutils.get_drift_fn(model, sde, train=False, sampling=True, **(drift_kwargs or {}))
         timesteps = torch.linspace(0, 1-eps, steps + 1, device=device)
         dt = (1 - eps) / steps
 
@@ -127,7 +139,8 @@ def get_sampling_fn(config, sde, batch_dims, eps, device, **kwargs):
         steps=config.sampling.steps,
         eps=eps,
         device=device,
-        proj_fn=kwargs.get("proj_fn", lambda x: x)
+        proj_fn=kwargs.get("proj_fn", lambda x: x),
+        drift_kwargs=kwargs.get("drift_kwargs", None),
     )
     
     return sampling_fn

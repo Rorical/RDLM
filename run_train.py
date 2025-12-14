@@ -20,6 +20,7 @@ from model.ema import ExponentialMovingAverage
 
 from hypersphere import Hypersphere
 from hydra.utils import instantiate
+from omegaconf import OmegaConf
 
 torch.backends.cudnn.benchmark = True
 # torch.autograd.set_detect_anomaly(True)
@@ -195,7 +196,12 @@ def _run(rank, world_size, cfg):
     if cfg.training.snapshot_sampling:
         sampling_batch_size = cfg.training.batch_size * 2 // (cfg.ngpus * cfg.training.accum)
         sampling_shape = (sampling_batch_size, seq_length, vocab_size)
-        sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_shape, sampling_eps, device)
+        pfm_cfg = None
+        if "pfm" in cfg.sampling:
+            pfm_cfg = OmegaConf.to_container(cfg.sampling.pfm, resolve=True)
+        drift_kwargs = {"pfm": pfm_cfg} if pfm_cfg else None
+
+        sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_shape, sampling_eps, device, drift_kwargs=drift_kwargs)
         evaluator = Eval(cfg, sde, distributed=True)
 
         shift_and_decode = sutils.find_bos_and_shift_fn(token_size, base_max_length, tokenizer)

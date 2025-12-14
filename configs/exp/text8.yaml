@@ -26,7 +26,14 @@ data:
 
 sampling:
   steps       : 256
-  predictor   : grw
+  predictor   : pfm_ode
+  pfm:
+    topk               : 0        # 0 = no truncation
+    topp               : 1.0      # 1.0 = no nucleus truncation
+    mc_samples         : 1
+    stochastic         : false    # true enables MC sampling of directions
+    use_inv_time       : true     # divide by (1-t) as in flow matching
+    use_scheduler_coeff: false    # skip scheduler scaling in PFM ODE
 
 eval:
   batch_size    : ${training.batch_size}
