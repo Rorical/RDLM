@@ -9,11 +9,14 @@ import sys
 from typing import Dict, List, Tuple
 
 
-DEFAULT_VARIANTS: List[Tuple[str, str]] = [
-    ("sde", "sample_text8_sde"),
-    ("pfm_ode", "sample_text8_pfmode"),
-    ("pfm_topk", "sample_text8_pfm_topk"),
-    ("pfm_nucleus", "sample_text8_pfm_nucleus"),
+# (variant_name, hydra_exp, hydra_overrides)
+DEFAULT_VARIANTS: List[Tuple[str, str, List[str]]] = [
+    ("sde", "sample_text8_sde", []),
+    ("pfm_ode", "sample_text8_pfmode", []),
+    ("pfm_ode_64", "sample_text8_pfmode", ["sampling.steps=64"]),
+    ("pfm_topk", "sample_text8_pfm_topk", []),
+    ("pfm_nucleus", "sample_text8_pfm_nucleus", []),
+    ("pfm_nucleus_64", "sample_text8_pfm_nucleus", ["sampling.steps=64"]),
 ]
 
 
@@ -40,6 +43,7 @@ def parse_metrics(log_path: str) -> Dict[str, float]:
 def run_variant(
     variant_name: str,
     exp_name: str,
+    overrides: List[str],
     checkpoint: str,
     ngpus: int,
     base_dir: str,
@@ -61,6 +65,7 @@ def run_variant(
         "hydra/job_logging=disabled",
         "hydra/hydra_logging=disabled",
     ]
+    cmd.extend(overrides)
     print(f"[{variant_name}] Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if result.returncode != 0:
@@ -151,8 +156,16 @@ def main():
     parser.add_argument(
         "--variants",
         nargs="*",
-        default=[f"{name}:{exp}" for name, exp in DEFAULT_VARIANTS],
-        help="Variants as name:exp pairs (default uses predefined list).",
+        default=[
+            ":".join(
+                [name, exp] + ([",".join(overrides)] if overrides else [])
+            )
+            for name, exp, overrides in DEFAULT_VARIANTS
+        ],
+        help=(
+            "Variants as name:exp[:override1,override2,...] "
+            "(overrides are Hydra key=value strings)."
+        ),
     )
     args = parser.parse_args()
 
@@ -160,14 +173,19 @@ def main():
 
     variants = []
     for v in args.variants:
-        if ":" not in v:
+        parts = v.split(":")
+        if len(parts) < 2:
             parser.error(f"Variant '{v}' must be in name:exp format.")
-        name, exp = v.split(":", 1)
-        variants.append((name, exp))
+        name, exp = parts[0], parts[1]
+        overrides = []
+        if len(parts) > 2:
+            override_str = ":".join(parts[2:])  # allow colons in subsequent overrides
+            overrides = [o for o in override_str.split(",") if o]
+        variants.append((name, exp, overrides))
 
     run_results: List[Tuple[str, Dict[str, float]]] = []
-    for name, exp in variants:
-        variant, run_dir, metrics = run_variant(name, exp, args.checkpoint, args.ngpus, args.base_dir)
+    for name, exp, overrides in variants:
+        variant, run_dir, metrics = run_variant(name, exp, overrides, args.checkpoint, args.ngpus, args.base_dir)
         run_results.append((variant, metrics))
 
     print_table(run_results)
