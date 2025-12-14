@@ -92,7 +92,7 @@ def _run(rank, world_size, cfg):
     
     
     # load saved state from checkpoint
-    loaded_state = torch.load(cfg.model_path, map_location=device)
+    loaded_state = torch.load(cfg.model_path, map_location=device, weights_only=False)
     train_cfg = loaded_state['config']
 
     # Update sampling config from training config

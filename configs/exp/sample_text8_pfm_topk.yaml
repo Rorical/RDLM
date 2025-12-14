@@ -1,0 +1,25 @@
+# @package _global_
+
+name: sample/text8_pfm_topk
+model_path:
+
+sampling:
+  batch_per_gpu: 0
+  predictor    : pfm_ode   # deterministic probability-flow ODE with top-k truncation
+  steps        : 256
+  pfm:
+    topk               : 10   # keep top-10 tokens
+    topp               : 1.0
+    mc_samples         : 1
+    stochastic         : false
+    use_inv_time       : true
+    use_scheduler_coeff: false
+
+eval:
+  batch_size    : 0
+  n_iters       : 200
+  entropy       : True
+  nll           : True
+  gen_ppl       : True
+  eval_model    : gptj
+  simul_steps   : 500
