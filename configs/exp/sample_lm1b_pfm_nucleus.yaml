@@ -1,0 +1,25 @@
+# @package _global_
+
+name: sample/lm1b_pfm_nucleus
+model_path:
+
+sampling:
+  batch_per_gpu: 0
+  predictor    : pfm_ode   # probability-flow ODE with nucleus-sampled velocities
+  steps        : 512
+  pfm:
+    topk               : 0
+    topp               : 0.9  # nucleus mass
+    mc_samples         : 4    # Monte Carlo samples for velocity averaging
+    stochastic         : true
+    use_inv_time       : true
+    use_scheduler_coeff: false
+
+eval:
+  batch_size    : 0
+  n_iters       : 200
+  entropy       : True
+  nll           : True
+  gen_ppl       : True
+  eval_model    : gpt2
+  simul_steps   : 500
