@@ -11,13 +11,25 @@ from typing import Dict, List, Tuple
 
 # (variant_name, hydra_exp, hydra_overrides)
 # Defaults target LM1B checkpoints. Override with --variants if you want text8 configs.
+# ODE ablations now keep only nucleus variants.
 DEFAULT_VARIANTS: List[Tuple[str, str, List[str]]] = [
     ("sde", "sample_lm1b_sde", []),
-    ("pfm_ode", "sample_lm1b_pfmode", []),
-    ("pfm_ode_256", "sample_lm1b_pfmode", ["sampling.steps=256"]),
-    ("pfm_topk", "sample_lm1b_pfm_topk", []),
     ("pfm_nucleus", "sample_lm1b_pfm_nucleus", []),
     ("pfm_nucleus_256", "sample_lm1b_pfm_nucleus", ["sampling.steps=256"]),
+    # Single-sample MC nucleus: each ODE step samples 1 token direction
+    ("pfm_nucleus_mc1", "sample_lm1b_pfm_nucleus", [
+        "sampling.pfm.mc_samples=1",
+        "sampling.pfm.stochastic=true",
+        "sampling.steps=256"
+    ]),
+    # Posterior decode at t=1-eps (no final state argmax)
+    ("pfm_nucleus_post", "sample_lm1b_pfm_nucleus_post", []),
+    # Posterior decode + single-sample MC nucleus
+    ("pfm_nucleus_post_mc1", "sample_lm1b_pfm_nucleus_post", [
+        "sampling.pfm.mc_samples=1",
+        "sampling.pfm.stochastic=true",
+        "sampling.steps=256"
+    ]),
 ]
 
 

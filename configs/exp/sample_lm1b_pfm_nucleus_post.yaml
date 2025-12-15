@@ -1,0 +1,26 @@
+# @package _global_
+
+name: sample/lm1b_pfm_nucleus_post
+model_path:
+
+sampling:
+  batch_per_gpu: 0
+  predictor    : pfm_ode
+  steps        : 512
+  decode       : posterior   # decode via model posterior at t=1-eps
+  pfm:
+    topk               : 0
+    topp               : 0.9
+    mc_samples         : 4
+    stochastic         : true
+    use_inv_time       : true
+    use_scheduler_coeff: false
+
+eval:
+  batch_size    : 0
+  n_iters       : 200
+  entropy       : True
+  nll           : True
+  gen_ppl       : True
+  eval_model    : gpt2
+  simul_steps   : 500

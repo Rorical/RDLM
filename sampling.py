@@ -98,12 +98,14 @@ def get_sde_sampler(
     device='cpu', 
     proj_fn=lambda x: x, # used for conditional sampling
     drift_kwargs=None,
+    decode_mode="state",  # "state" uses final x; "posterior" uses model softmax at t_final
 ):
     predictor = get_predictor(predictor)(sde)
 
     @torch.no_grad()
     def pc_sampler(model):
         drift_fn = mutils.get_drift_fn(model, sde, train=False, sampling=True, **(drift_kwargs or {}))
+        model_fn = mutils.get_model_fn(model, train=False)
         timesteps = torch.linspace(0, 1-eps, steps + 1, device=device)
         dt = (1 - eps) / steps
 
@@ -118,8 +120,20 @@ def get_sde_sampler(
         
         # Sample indices
         x = proj_fn(x)
-        t = timesteps[-1] * torch.ones(x.shape[0], 1, device=device)
-        probs = sde.manifold.map_to_simplex(x)
+        t_final = timesteps[-1] * torch.ones(x.shape[0], 1, device=device)
+
+        if decode_mode == "posterior":
+            logits = model_fn(x, t_final.squeeze(-1))
+            probs = torch.softmax(logits, dim=-1)
+            # pad if model output dim < manifold dim+1
+            if probs.shape[-1] < x.shape[-1]:
+                pad = torch.zeros(
+                    (*probs.shape[:-1], x.shape[-1] - probs.shape[-1]),
+                    device=probs.device, dtype=probs.dtype
+                )
+                probs = torch.cat([probs, pad], dim=-1)
+        else:
+            probs = sde.manifold.map_to_simplex(x)
 
         if sde.add_mask_token:
             # Remove mask token prob
@@ -141,6 +155,7 @@ def get_sampling_fn(config, sde, batch_dims, eps, device, **kwargs):
         device=device,
         proj_fn=kwargs.get("proj_fn", lambda x: x),
         drift_kwargs=kwargs.get("drift_kwargs", None),
+        decode_mode=getattr(config.sampling, "decode", "state"),
     )
     
     return sampling_fn
