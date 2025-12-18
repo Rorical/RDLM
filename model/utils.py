@@ -19,6 +19,9 @@ def get_drift_fn(model, sde, train=False, sampling=False, **kwargs):
         assert not train, "Must sample in eval mode"
     model_fn = get_model_fn(model, train=train)
 
+    block_tokens = kwargs.get("block_tokens") or []
+    block_tokens = [int(i) for i in block_tokens]
+
     pfm_cfg = kwargs.get("pfm", {})
     topk = pfm_cfg.get("topk", 0)
     topp = pfm_cfg.get("topp", 1.0)
@@ -46,6 +49,22 @@ def get_drift_fn(model, sde, train=False, sampling=False, **kwargs):
         out = out / out.sum(dim=-1, keepdim=True).clamp_min(1e-12)
         return out
 
+    def _mask_blocklist(probs):
+        if not block_tokens:
+            return probs
+        vocab = probs.shape[-1]
+        valid_idx = []
+        for idx in block_tokens:
+            if -vocab <= idx < vocab:
+                valid_idx.append(idx if idx >= 0 else vocab + idx)
+        if not valid_idx:
+            return probs
+        mask = torch.ones(vocab, device=probs.device, dtype=probs.dtype)
+        mask[valid_idx] = 0
+        probs = probs * mask
+        probs = probs / probs.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+        return probs
+
     def _mc_weighted_sum(probs, x, mc):
         flat = probs.reshape(-1, probs.shape[-1])
         cat = Categorical(flat)
@@ -65,6 +84,7 @@ def get_drift_fn(model, sde, train=False, sampling=False, **kwargs):
                 [probs, torch.zeros((*probs.shape[:-1], x.shape[-1]-probs.shape[-1]), device=x.device)],
                 dim=-1
             )
+            probs = _mask_blocklist(probs)
 
             if pfm_cfg:
                 probs = _truncate_probs(probs)

@@ -17,7 +17,7 @@ training:
   snapshot_freq_for_preemption: 5000
   snapshot_sampling: True
   ema          : 0.9999
-  loss_type    : ce
+  loss_type    : pfm
 
 data:
   train    : lm1b

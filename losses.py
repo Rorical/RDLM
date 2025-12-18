@@ -181,3 +181,38 @@ def ce_loss_fn(sde, train, sampling_eps=1e-4, **kwargs):
         return loss
      
     return loss_fn
+
+
+@register_loss_fn(name="pfm")
+@register_loss_fn(name="pfm_ce")
+def pfm_loss_fn(sde, train, sampling_eps=1e-4, **kwargs):
+    """
+    Probability flow matching objective:
+      1) Sample t ~ U(0,1)
+      2) Sample x0 ~ prior (conditional on t for mixture paths)
+      3) Interpolate deterministically along the geodesic to x1 (data)
+      4) Cross-entropy on endpoint posterior p_theta(y | x_t, t)
+    """
+    def loss_fn(model, batch, cond=None):
+        """
+        Batch shape: [B, L, D]
+        """
+        model_fn = mutils.get_model_fn(model, train=train)
+
+        if sde.scheduler.weight_type == "default" or not train:
+            t = (1 - sampling_eps) * torch.rand(batch.shape[0], device=batch.device)
+        else:
+            t = sde.scheduler.importance_weighted_time((batch.shape[0],), batch.device)
+
+        prior_sample = sde.prior_sample(batch.shape, batch.device, t=t)
+        interpolant = sde.geodesic_interpolant(prior_sample, batch, t)
+
+        output = model_fn(interpolant, t)
+        loss = torch.vmap(torch.nn.CrossEntropyLoss(reduction='sum'))(
+            output.to(torch.float32), batch[...,:output.shape[-1]].argmax(-1)
+        )
+        loss = loss * sde.scheduler.importance_weight(t, train)
+
+        return loss
+     
+    return loss_fn

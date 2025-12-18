@@ -99,12 +99,30 @@ def get_sde_sampler(
     proj_fn=lambda x: x, # used for conditional sampling
     drift_kwargs=None,
     decode_mode="state",  # "state" uses final x; "posterior" uses model softmax at t_final
+    block_tokens=None,    # indices to zero out during sampling/decoding
 ):
     predictor = get_predictor(predictor)(sde)
+    block_tokens = [int(i) for i in (block_tokens or [])]
+
+    def _mask_probs(probs):
+        if not block_tokens:
+            return probs
+        vocab = probs.shape[-1]
+        valid_idx = [idx if idx >= 0 else vocab + idx for idx in block_tokens if -vocab <= idx < vocab]
+        if not valid_idx:
+            return probs
+        mask = torch.ones(vocab, device=probs.device, dtype=probs.dtype)
+        mask[valid_idx] = 0
+        probs = probs * mask
+        probs = probs / probs.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+        return probs
 
     @torch.no_grad()
     def pc_sampler(model):
-        drift_fn = mutils.get_drift_fn(model, sde, train=False, sampling=True, **(drift_kwargs or {}))
+        _drift_kwargs = dict(drift_kwargs) if drift_kwargs else {}
+        if block_tokens and "block_tokens" not in _drift_kwargs:
+            _drift_kwargs["block_tokens"] = block_tokens
+        drift_fn = mutils.get_drift_fn(model, sde, train=False, sampling=True, **_drift_kwargs)
         model_fn = mutils.get_model_fn(model, train=False)
         timesteps = torch.linspace(0, 1-eps, steps + 1, device=device)
         dt = (1 - eps) / steps
@@ -125,6 +143,7 @@ def get_sde_sampler(
         if decode_mode == "posterior":
             logits = model_fn(x, t_final.squeeze(-1))
             probs = torch.softmax(logits, dim=-1)
+            probs = _mask_probs(probs)
             # pad if model output dim < manifold dim+1
             if probs.shape[-1] < x.shape[-1]:
                 pad = torch.zeros(
@@ -134,6 +153,7 @@ def get_sde_sampler(
                 probs = torch.cat([probs, pad], dim=-1)
         else:
             probs = sde.manifold.map_to_simplex(x)
+            probs = _mask_probs(probs)
 
         if sde.add_mask_token:
             # Remove mask token prob
@@ -156,6 +176,7 @@ def get_sampling_fn(config, sde, batch_dims, eps, device, **kwargs):
         proj_fn=kwargs.get("proj_fn", lambda x: x),
         drift_kwargs=kwargs.get("drift_kwargs", None),
         decode_mode=getattr(config.sampling, "decode", "state"),
+        block_tokens=getattr(config.sampling, "block_tokens", None),
     )
     
     return sampling_fn

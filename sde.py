@@ -59,6 +59,19 @@ class LogBridge(abc.ABC):
     @abc.abstractmethod
     def interpolant(self, start, end, t):
         pass
+
+    # Deterministic geodesic interpolant used for probability flow matching
+    def geodesic_interpolant(self, start, end, t):
+        """
+        Interpolate from `start` to `end` along the sphere geodesic at time t in [0,1].
+        Shapes:
+            start/end: [B, L, D], t: [B] or broadcastable.
+        """
+        t_broadcast = t
+        while t_broadcast.dim() < start.dim():
+            t_broadcast = t_broadcast.unsqueeze(-1)
+        direction = self.manifold.log(point=end, base_point=start)
+        return self.manifold.exp(tangent_vec=t_broadcast * direction, base_point=start)
     
     # Simulate the interpolant
     def interpolant_simul(self, start, end, t, simul_steps):

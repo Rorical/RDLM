@@ -182,7 +182,9 @@ def _run(rank, world_size, cfg):
     optimize_fn = losses.optimization_manager(cfg)
 
     loss_type = cfg.training.loss_type
-    eval_loss_type = "elbo"
+    eval_loss_type = getattr(cfg.training, "eval_loss_type", None)
+    if eval_loss_type is None:
+        eval_loss_type = loss_type if str(loss_type).startswith("pfm") else "elbo"
     mprint(f"Training loss type: {loss_type} | Eval loss type: {eval_loss_type} | weight type: {scheduler.weight_type}")
 
     train_step_fn = losses.get_step_fn(
