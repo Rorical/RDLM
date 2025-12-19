@@ -98,7 +98,7 @@ def get_sde_sampler(
     device='cpu', 
     proj_fn=lambda x: x, # used for conditional sampling
     drift_kwargs=None,
-    decode_mode="state",  # "state" uses final x; "posterior" uses model softmax at t_final
+    decode_mode="posterior",  # "state" uses final x; "posterior" uses model softmax at t_final
     block_tokens=None,    # indices to zero out during sampling/decoding
 ):
     predictor = get_predictor(predictor)(sde)
@@ -175,7 +175,7 @@ def get_sampling_fn(config, sde, batch_dims, eps, device, **kwargs):
         device=device,
         proj_fn=kwargs.get("proj_fn", lambda x: x),
         drift_kwargs=kwargs.get("drift_kwargs", None),
-        decode_mode=getattr(config.sampling, "decode", "state"),
+        decode_mode=getattr(config.sampling, "decode", "posterior"),
         block_tokens=getattr(config.sampling, "block_tokens", None),
     )
     
